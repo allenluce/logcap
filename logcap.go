@@ -102,7 +102,7 @@ func (hook *LogCap) Levels() []logrus.Level {
 
 var hookMutex sync.Mutex
 
-// Stop starts the hook and removes ALL hooks from the logger.
+// Start starts the hook, attaching it to the given logger.
 func (hook *LogCap) Start() {
 	hookMutex.Lock()
 	defer hookMutex.Unlock()

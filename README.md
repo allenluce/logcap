@@ -126,7 +126,7 @@ Levels is required to implement the Logrus hook interface
 ```go
 func (hook *LogCap) Start()
 ```
-Stop starts the hook and removes ALL hooks from the logger.
+Start starts the hook, attaching it to the given logger.
 
 #### func (*LogCap) Stop
 
