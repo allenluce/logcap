@@ -1,6 +1,4 @@
-# logcap
---
-    import "github.com/allenluce/logcap"
+# Logcap &nbsp;[![Build Status](https://travis-ci.org/allenluce/logcap.svg?branch=master)](https://travis-ci.org/allenluce/logcap)&nbsp;[![GoDoc](https://godoc.org/github.com/allenluce/logcap?status.svg)](https://godoc.org/github.com/allenluce/logcap)
 
 Package logcap is for capturing Logrus log entries and comparing them with
 Gomega matchers.
@@ -12,6 +10,7 @@ It's designed to work within Ginkgo test suites:
     import (
     	"testing"
 
+    	"github.com/allenluce/logcap"
     	"github.com/Sirupsen/logrus"
     	. "github.com/onsi/ginkgo"
     	. "github.com/onsi/gomega"
@@ -19,11 +18,11 @@ It's designed to work within Ginkgo test suites:
 
     var _ = Describe("matches logs", func() {
     	It("matcher", func() {
-    		logHook := NewLogHook()
+    		logHook := logcap.NewLogHook()
     		logHook.Start()
     		defer logHook.Stop()
     		logrus.Info("This is a log entry")
-    		Ω(logHook).Should(HaveLogs("This is a log entry"))
+    		Ω(logHook).Should(logcap.HaveLogs("This is a log entry"))
     	})
     })
 
