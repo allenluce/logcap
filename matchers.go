@@ -220,10 +220,16 @@ func (m *logsMatcher) baseMessage(matched bool) (message string) {
 			}
 			moMessage := m.NonMatching.Message
 			moMessage += fmt.Sprintf("\n    logged at %s:%d\n", m.NonMatching.Data["file"], m.NonMatching.Data["line"])
-			delete(m.NonMatching.Data, "file")
-			delete(m.NonMatching.Data, "line")
-			if len(m.NonMatching.Data) > 0 {
-				moMessage += fmt.Sprintf("    with %#v", m.NonMatching.Data)
+
+			if len(m.NonMatching.Data) > 2 {
+				data := logrus.Fields{}
+				for k, v := range m.NonMatching.Data {
+					if k == "file" || k == "line" {
+						continue
+					}
+					data[k] = v
+				}
+				moMessage += fmt.Sprintf("    with %#v", data)
 			}
 			message += matchEntry.Expected.FailureMessage(moMessage) + "\n"
 			if matchEntry.Fields != nil {
@@ -247,10 +253,15 @@ func (m *logsMatcher) baseMessage(matched bool) (message string) {
 		message += "Nonmatching log:\n"
 		message += "  " + m.NonMatching.Message + "\n"
 		message += fmt.Sprintf("    logged at %s:%d\n", m.NonMatching.Data["file"], m.NonMatching.Data["line"])
-		delete(m.NonMatching.Data, "file")
-		delete(m.NonMatching.Data, "line")
-		if len(m.NonMatching.Data) > 0 {
-			message += fmt.Sprintf("    with %#v\n", m.NonMatching.Data)
+		if len(m.NonMatching.Data) > 2 {
+			data := logrus.Fields{}
+			for k, v := range m.NonMatching.Data {
+				if k == "file" || k == "line" {
+					continue
+				}
+				data[k] = v
+			}
+			message += fmt.Sprintf("    with %#v\n", data)
 		}
 	}
 	return
@@ -268,13 +279,16 @@ func (m *noLogsMatcher) Match(actual interface{}) (success bool, err error) {
 	hook := actual.(*LogCap)
 	l := len(hook.entries) + len(hook.cache)
 	var entry *markedEntry
+	cacheTop := 0
 	for i := 0; i < l; i++ {
-		if len(hook.cache) > 0 {
+		if cacheTop < len(hook.cache) {
 			entry, hook.cache = hook.cache[0], hook.cache[1:]
+			cacheTop++
 		} else {
 			e := <-hook.entries
 			entry = &markedEntry{e, false}
 			hook.cache = append(hook.cache, entry)
+			cacheTop++
 		}
 		if m.level != nil && entry.Level != *m.level {
 			continue
@@ -290,18 +304,24 @@ func (m *noLogsMatcher) FailureMessage(actual interface{}) (message string) {
 	hook := actual.(*LogCap)
 	message = fmt.Sprintf("Expected no logs. Instead, got %d:", m.found)
 	for _, entry := range hook.cache {
+		if m.level != nil && entry.Level != *m.level {
+			continue
+		}
 		if entry.matched {
 			continue
 		}
-		data := entry.Data
-		file, line := data["file"], data["line"]
-		delete(data, "file")
-		delete(data, "line")
 		extra := ""
-		if len(data) > 0 {
+		if len(entry.Data) > 2 {
+			data := logrus.Fields{}
+			for k, v := range entry.Data {
+				if k == "file" || k == "line" {
+					continue
+				}
+				data[k] = v
+			}
 			extra = fmt.Sprintf(" (%v)", data)
 		}
-		message = message + fmt.Sprintf("\n  %s%s\n  logged at %s:%d", entry.Message, extra, file, line)
+		message = message + fmt.Sprintf("\n  %s%s\n  logged at %s:%d", entry.Message, extra, entry.Data["file"], entry.Data["line"])
 	}
 	return
 }
@@ -310,6 +330,9 @@ func (m *noLogsMatcher) NegatedFailureMessage(actual interface{}) (message strin
 	hook := actual.(*LogCap)
 	message = fmt.Sprintf("Did not expect 0 logs\n")
 	for _, entry := range hook.cache {
+		if m.level != nil && entry.Level != *m.level {
+			continue
+		}
 		if entry.matched {
 			continue
 		}
