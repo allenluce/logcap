@@ -42,6 +42,8 @@ type logsMatcher struct {
 
 type noLogsMatcher struct {
 	matchers.EqualMatcher
+	level *logrus.Level
+	found int
 }
 
 // HaveLogs takes a number of strings, Gomega matchers and/or
@@ -76,10 +78,19 @@ func HaveLogs(args ...interface{}) types.GomegaMatcher {
 
 // HaveNoLogs is the inverse of HaveLogs(). It makes sure that there
 // are no logs that haven't been matched already.
-func HaveNoLogs() types.GomegaMatcher {
-	return &noLogsMatcher{
+//
+// If given a level, it'll only make sure no logs of that level have
+// been seen. E.g.:
+//
+//  Ω(logHook).Should(HaveNoLogs(logrus.ErrorLevel))
+func HaveNoLogs(level ...logrus.Level) types.GomegaMatcher {
+	m := &noLogsMatcher{
 		EqualMatcher: matchers.EqualMatcher{Expected: 0},
 	}
+	if len(level) > 0 {
+		m.level = &level[0]
+	}
+	return m
 }
 
 // matcherOrEqual if given a matcher will use it. Otherwise it'll use
@@ -255,20 +266,7 @@ func (m *logsMatcher) NegatedFailureMessage(actual interface{}) (message string)
 
 func (m *noLogsMatcher) Match(actual interface{}) (success bool, err error) {
 	hook := actual.(*LogCap)
-	l := len(hook.entries)
-	// Count non-matching entries on the cache
-	for _, entry := range hook.cache {
-		if !entry.matched {
-			l++
-		}
-	}
-	return m.EqualMatcher.Match(l)
-}
-
-func (m *noLogsMatcher) FailureMessage(actual interface{}) (message string) {
-	hook := actual.(*LogCap)
 	l := len(hook.entries) + len(hook.cache)
-	message = fmt.Sprintf("Expected no logs. Instead, got %d:", l)
 	var entry *markedEntry
 	for i := 0; i < l; i++ {
 		if len(hook.cache) > 0 {
@@ -277,6 +275,23 @@ func (m *noLogsMatcher) FailureMessage(actual interface{}) (message string) {
 			e := <-hook.entries
 			entry = &markedEntry{e, false}
 			hook.cache = append(hook.cache, entry)
+		}
+		if m.level != nil && entry.Level != *m.level {
+			continue
+		}
+		if !entry.matched { // Count non-matched entries
+			m.found++
+		}
+	}
+	return m.EqualMatcher.Match(m.found)
+}
+
+func (m *noLogsMatcher) FailureMessage(actual interface{}) (message string) {
+	hook := actual.(*LogCap)
+	message = fmt.Sprintf("Expected no logs. Instead, got %d:", m.found)
+	for _, entry := range hook.cache {
+		if entry.matched {
+			continue
 		}
 		data := entry.Data
 		file, line := data["file"], data["line"]
@@ -295,12 +310,9 @@ func (m *noLogsMatcher) NegatedFailureMessage(actual interface{}) (message strin
 	hook := actual.(*LogCap)
 	message = fmt.Sprintf("Did not expect 0 logs\n")
 	for _, entry := range hook.cache {
-		message = message + fmt.Sprintf("\n%s\n  logged at %s:%d", entry.Message, entry.Data["file"], entry.Data["line"])
-	}
-	l := len(hook.entries)
-	for i := 0; i < l; i++ {
-		entry := <-hook.entries
-		hook.cache = append(hook.cache, &markedEntry{entry, false})
+		if entry.matched {
+			continue
+		}
 		message = message + fmt.Sprintf("\n%s\n  logged at %s:%d", entry.Message, entry.Data["file"], entry.Data["line"])
 	}
 	return
