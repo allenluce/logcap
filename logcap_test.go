@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
@@ -34,11 +35,19 @@ var _ = Describe("LogCap", func() {
 			close(done)
 		})
 
+		It("logs a couple warning messages", func(done Done) {
+			logrus.Warning("This is a warning")
+			logrus.Warning("This is another warning")
+			Ω(logHook).Should(HaveLogs("This is a warning"))
+			Ω(logHook).Should(HaveLogs("This is another warning"))
+			close(done)
+		})
+
 		It("logs a debug message, with fields ", func(done Done) {
 			logrus.WithFields(logrus.Fields{"time": "long time ago"}).
 				Debug("This is for debugging")
 			Ω(logHook).Should(HaveLogs("This is for debugging", logrus.Fields{
-				"fields.time": "long time ago",
+				"time": "long time ago",
 			}))
 			close(done)
 		})
@@ -61,19 +70,19 @@ var _ = Describe("LogCap", func() {
 		})
 		It("lists call site", func(done Done) {
 			logrus.Info("I need some pancakes")
-			h := HaveLogs("I need some moolah")
+			h := HaveLogs("I need some moolah", time.Millisecond*100)
 			h.Match(logHook)
 			Ω(h.FailureMessage(logHook)).Should(ContainSubstring(`logcap_test.go`))
-			Ω(logHook).Should(HaveLogs("I need some pancakes"))
+			Ω(logHook).Should(HaveLogs("I need some pancakes", time.Millisecond*100))
 			close(done)
 		})
 		It("ignores call site", func(done Done) {
 			logHook.IgnoreCaller("logcap_test.go")
 			logrus.Info("I need some pancakes")
-			h := HaveLogs("I need some moolah")
+			h := HaveLogs("I need some moolah", time.Millisecond*100)
 			h.Match(logHook)
 			Ω(h.FailureMessage(logHook)).ShouldNot(ContainSubstring(`logcap_test.go`))
-			Ω(logHook).Should(HaveLogs("I need some pancakes"))
+			Ω(logHook).Should(HaveLogs("I need some pancakes", time.Millisecond*100))
 			close(done)
 		})
 		It("composes with Gomega matchers", func(done Done) {

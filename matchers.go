@@ -35,7 +35,7 @@ type logsMatch struct {
 }
 
 type logsMatcher struct {
-	Matches     []*logsMatch
+	Matchers    []*logsMatch
 	NonMatching *markedEntry
 	timeout     time.Duration
 }
@@ -108,26 +108,26 @@ func parseMatchArgs(args []interface{}, m *logsMatcher) {
 	for _, arg := range args {
 		switch arg := arg.(type) {
 		case logrus.Fields: // Go backwards through matches and add this to its fields arg.
-			for i := len(m.Matches) - 1; i >= 0; i-- {
-				if m.Matches[i].Fields != nil { // Only if they don't have one already.
+			for i := len(m.Matchers) - 1; i >= 0; i-- {
+				if m.Matchers[i].Fields != nil { // Only if they don't have one already.
 					break
 				}
-				m.Matches[i].Fields = &arg
+				m.Matchers[i].Fields = &arg
 			}
 		case Repeater:
 			for i := 0; i < arg.N; i++ {
-				m.Matches = append(m.Matches, matcherOrEqual(arg.M))
+				m.Matchers = append(m.Matchers, matcherOrEqual(arg.M))
 			}
 		case time.Duration:
 			m.timeout = arg
 		default:
-			m.Matches = append(m.Matches, matcherOrEqual(arg))
+			m.Matchers = append(m.Matchers, matcherOrEqual(arg))
 		}
 	}
 }
 
-func (m *logsMatcher) numMatches() (count int) {
-	for _, match := range m.Matches {
+func (m *logsMatcher) numMatchersLeft() (count int) {
+	for _, match := range m.Matchers {
 		if !match.matched {
 			count++
 		}
@@ -135,22 +135,22 @@ func (m *logsMatcher) numMatches() (count int) {
 	return
 }
 
-// Match will cache log entries internally for future matching.
 func (m *logsMatcher) Match(actual interface{}) (success bool, err error) {
 	// Reset match indicators
-	for _, match := range m.Matches {
+	for _, match := range m.Matchers {
 		match.matched = false
 	}
 	hook := actual.(*LogCap)
+	hook.cacheMut.Lock()
+	defer hook.cacheMut.Unlock()
 	var entry *markedEntry
 
 	cacheTop := 0
 MainLoop:
 	// Loop until all matched or timeout.
-	for m.numMatches() > 0 {
+	for m.numMatchersLeft() > 0 {
 		if cacheTop < len(hook.cache) { // Look at old logs first.
 			entry = hook.cache[cacheTop]
-			cacheTop++
 		} else {
 			select {
 			case e := <-hook.entries:
@@ -159,11 +159,12 @@ MainLoop:
 				return false, nil
 			}
 			hook.cache = append(hook.cache, entry)
-			cacheTop++
 		}
-		// fmt.Printf("I see %s [%d] with %+v [%d]\n", entry.Message, len(hook.entries), entry.Data, m.numMatches())
+		cacheTop++
+		// fmt.Printf("I see %s [%d] with %+v [%d]\n", entry.Message, len(hook.entries), entry.Data, m.numMatchersLeft())
 	MatchLoop:
-		for _, matchItem := range m.Matches {
+		// Find a matcher for this entry
+		for _, matchItem := range m.Matchers {
 			if matchItem.matched { // Already matched it.
 				continue MatchLoop
 			}
@@ -171,7 +172,7 @@ MainLoop:
 			if err != nil {
 				return false, err
 			}
-			if !doesMatch {
+			if !doesMatch { // Nope, try the next one.
 				continue MatchLoop
 			}
 			if matchItem.Fields != nil {
@@ -207,13 +208,12 @@ MainLoop:
 			continue MainLoop
 		}
 		m.NonMatching = entry
-		return false, nil
 	}
 	return true, nil
 }
 
 func (m *logsMatcher) baseMessage(matched bool) (message string) {
-	for _, matchEntry := range m.Matches {
+	for _, matchEntry := range m.Matchers {
 		if m.NonMatching != nil {
 			if matchEntry.matched { // Don't report on things I know about
 				continue
@@ -277,19 +277,20 @@ func (m *logsMatcher) NegatedFailureMessage(actual interface{}) (message string)
 
 func (m *noLogsMatcher) Match(actual interface{}) (success bool, err error) {
 	hook := actual.(*LogCap)
+	hook.cacheMut.Lock()
+	defer hook.cacheMut.Unlock()
 	l := len(hook.entries) + len(hook.cache)
 	var entry *markedEntry
 	cacheTop := 0
 	for i := 0; i < l; i++ {
 		if cacheTop < len(hook.cache) {
-			entry, hook.cache = hook.cache[0], hook.cache[1:]
-			cacheTop++
+			entry = hook.cache[cacheTop]
 		} else {
 			e := <-hook.entries
 			entry = &markedEntry{e, false}
 			hook.cache = append(hook.cache, entry)
-			cacheTop++
 		}
+		cacheTop++
 		if m.level != nil && entry.Level != *m.level {
 			continue
 		}
@@ -328,6 +329,8 @@ func (m *noLogsMatcher) FailureMessage(actual interface{}) (message string) {
 
 func (m *noLogsMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	hook := actual.(*LogCap)
+	hook.cacheMut.Lock()
+	defer hook.cacheMut.Unlock()
 	message = fmt.Sprintf("Did not expect 0 logs\n")
 	for _, entry := range hook.cache {
 		if m.level != nil && entry.Level != *m.level {

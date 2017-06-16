@@ -46,12 +46,13 @@ import (
 
 // Logcap is the base type that implements a Logrus hook.
 type LogCap struct {
-	oldOut  io.Writer
-	entries chan *logrus.Entry
-	ignores []string
-	logger  *logrus.Logger
-	display map[logrus.Level]interface{}
-	cache   []*markedEntry
+	oldOut   io.Writer
+	entries  chan *logrus.Entry
+	ignores  []string
+	logger   *logrus.Logger
+	display  map[logrus.Level]interface{}
+	cache    []*markedEntry
+	cacheMut sync.Mutex
 }
 
 // Display registers log levels to display to os.Stderr. Normally, all
@@ -91,9 +92,9 @@ EntryLoop:
 		}
 		break
 	}
-	entry.Logger.Out = ioutil.Discard
+	e.Logger.Out = ioutil.Discard
 	if _, ok := hook.display[entry.Level]; ok {
-		entry.Logger.Out = os.Stderr
+		e.Logger.Out = os.Stderr
 	}
 	hook.entries <- &entry
 	return nil
