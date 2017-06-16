@@ -41,7 +41,6 @@ import (
 	"sync"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/getlantern/deepcopy"
 )
 
 // Logcap is the base type that implements a Logrus hook.
@@ -76,8 +75,18 @@ func (hook *LogCap) IgnoreCaller(s string) {
 
 // Fire is required to implement the Logrus hook interface
 func (hook *LogCap) Fire(e *logrus.Entry) error {
-	var entry logrus.Entry
-	deepcopy.Copy(&entry, e)
+	entry := logrus.Entry{
+		Logger:  e.Logger,
+		Time:    e.Time,
+		Level:   e.Level,
+		Message: e.Message,
+		Buffer:  e.Buffer,
+		Data:    logrus.Fields{},
+	}
+	// Copy data into new struct
+	for k, v := range e.Data {
+		entry.Data[k] = v
+	}
 
 EntryLoop:
 	for i := 1; ; i++ {
