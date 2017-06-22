@@ -73,6 +73,8 @@ func (hook *LogCap) IgnoreCaller(s string) {
 	hook.ignores = append(hook.ignores, s)
 }
 
+var outMutex sync.Mutex
+
 // Fire is required to implement the Logrus hook interface
 func (hook *LogCap) Fire(e *logrus.Entry) error {
 	entry := logrus.Entry{
@@ -101,10 +103,12 @@ EntryLoop:
 		}
 		break
 	}
+	outMutex.Lock()
 	e.Logger.Out = ioutil.Discard
 	if _, ok := hook.display[entry.Level]; ok {
 		e.Logger.Out = os.Stderr
 	}
+	outMutex.Unlock()
 	hook.entries <- &entry
 	return nil
 }
@@ -142,6 +146,8 @@ func NewLogHook(l ...*logrus.Logger) *LogCap {
 	} else {
 		logger = l[0]
 	}
+	hookMutex.Lock()
+	defer hookMutex.Unlock()
 	logger.Hooks = make(logrus.LevelHooks)
 	hook := new(LogCap)
 	hook.logger = logger
