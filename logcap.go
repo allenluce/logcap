@@ -33,6 +33,7 @@ It's designed to work within Ginkgo test suites:
 package logcap
 
 import (
+	"errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -109,7 +110,11 @@ EntryLoop:
 		e.Logger.Out = os.Stderr
 	}
 	outMutex.Unlock()
-	hook.entries <- &entry
+	select {
+	case hook.entries <- &entry:
+	default:
+		return errors.New("internal buffer full, use a higher entryCount value")
+	}
 	return nil
 }
 
@@ -136,23 +141,30 @@ func (hook *LogCap) Stop() {
 	hook.logger.Hooks = make(logrus.LevelHooks) // Remove any hooks
 }
 
-// NewLogHook creates a new LogCap hook. If supplied with a logger,
-// it'll attach the hook to that logger. Otherwise it'll attach to the
-// logrus.StandardLogger()
-func NewLogHook(l ...*logrus.Logger) *LogCap {
-	var logger *logrus.Logger
-	if len(l) == 0 {
-		logger = logrus.StandardLogger()
-	} else {
-		logger = l[0]
+// NewLogHook creates a new LogCap hook. If one of the supplied
+// arguments is a *logrus.Logger, it'll attach the hook to that
+// logger. Otherwise it'll attach to the logrus.StandardLogger(). If
+// one of the supplied arguments is an int, it will be used as the
+// entryCount, the number of logs that can be held in the internal
+// buffer. If that limit is reached, logrus will error.
+func NewLogHook(args ...interface{}) *LogCap {
+	logger := logrus.StandardLogger()
+	entryCount := 1000
+
+	for _, arg := range args {
+		switch a := arg.(type) {
+		case *logrus.Logger:
+			logger = a
+		case int:
+			entryCount = a
+		}
 	}
-	hookMutex.Lock()
-	defer hookMutex.Unlock()
+
 	logger.Hooks = make(logrus.LevelHooks)
-	hook := new(LogCap)
-	hook.logger = logger
-	hook.entries = make(chan *logrus.Entry, 100)
-	hook.display = make(map[logrus.Level]interface{})
-	hook.ignores = []string{"Sirupsen/logrus"} // trim Logrus callers from chain
-	return hook
+	return &LogCap{
+		logger:  logger,
+		entries: make(chan *logrus.Entry, entryCount),
+		display: make(map[logrus.Level]interface{}),
+		ignores: []string{"Sirupsen/logrus"}, // trim Logrus callers from chain
+	}
 }
