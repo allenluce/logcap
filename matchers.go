@@ -162,6 +162,9 @@ MainLoop:
 			// fmt.Printf("I see %s [%d] with %+v [%d]\n", entry.Message, len(hook.entries), entry.Data, m.numMatchersLeft())
 		}
 		cacheTop++
+		if entry.matched { // We've already matched this one.
+			continue MainLoop
+		}
 	MatchLoop:
 		// Find a matcher for this entry
 		for _, matchItem := range m.Matchers {
