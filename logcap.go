@@ -9,7 +9,7 @@ It's designed to work within Ginkgo test suites:
   import (
   	"testing"
 
-  	"github.com/Sirupsen/logrus"
+  	"github.com/sirupsen/logrus"
   	. "github.com/onsi/ginkgo"
   	. "github.com/onsi/gomega"
   )
@@ -41,7 +41,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 // Logcap is the base type that implements a Logrus hook.
@@ -67,7 +67,7 @@ func (hook *LogCap) Display(levels ...logrus.Level) {
 // IgnoreCaller registers filenames (or parts of filenames) that
 // shouldn't be included when tracing the call stack back to find the
 // file and line number to display with log failures. It defaults to
-// []string{"Sirupsen/logrus"} to elide all files in the Logrus
+// []string{"sirupsen/logrus"} to elide all files in the Logrus
 // library. If you have your logging module in a subsidiary file, add
 // it with IgnoreCaller() so the original call site will be displayed.
 func (hook *LogCap) IgnoreCaller(s string) {
@@ -165,6 +165,6 @@ func NewLogHook(args ...interface{}) *LogCap {
 		logger:  logger,
 		entries: make(chan *logrus.Entry, entryCount),
 		display: make(map[logrus.Level]interface{}),
-		ignores: []string{"Sirupsen/logrus"}, // trim Logrus callers from chain
+		ignores: []string{"sirupsen/logrus"}, // trim Logrus callers from chain
 	}
 }

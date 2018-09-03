@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/onsi/gomega/matchers"
 	"github.com/onsi/gomega/types"
+	"github.com/sirupsen/logrus"
 )
 
 var logMut sync.Mutex
