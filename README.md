@@ -11,7 +11,7 @@ It's designed to work within Ginkgo test suites:
     	"testing"
 
     	"github.com/allenluce/logcap"
-    	"github.com/Sirupsen/logrus"
+    	"github.com/sirupsen/logrus"
     	. "github.com/onsi/ginkgo"
     	. "github.com/onsi/gomega"
     )
@@ -109,7 +109,7 @@ func (hook *LogCap) IgnoreCaller(s string)
 ```
 IgnoreCaller registers filenames (or parts of filenames) that shouldn't be
 included when tracing the call stack back to find the file and line number to
-display with log failures. It defaults to []string{"Sirupsen/logrus"} to elide
+display with log failures. It defaults to []string{"sirupsen/logrus"} to elide
 all files in the Logrus library. If you have your logging module in a subsidiary
 file, add it with IgnoreCaller() so the original call site will be displayed.
 
